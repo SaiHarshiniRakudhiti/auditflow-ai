@@ -1,7 +1,292 @@
 "use client";
-import { useEffect, useMemo, useState } from "react"; import { auditSpend, fallbackSummary, SpendItem, UseCase } from "../lib/audit-engine";
-const tools=["Cursor","GitHub Copilot","Claude","ChatGPT","Anthropic API","OpenAI API","Gemini","Windsurf"] as const; const useCases=["coding","writing","data","research","mixed"] as const;
-const starter:SpendItem[]=[{tool:"Cursor",plan:"Business",monthlySpend:80,seats:2,useCase:"coding"},{tool:"GitHub Copilot",plan:"Business",monthlySpend:38,seats:2,useCase:"coding"},{tool:"OpenAI API",plan:"API direct",monthlySpend:650,seats:1,useCase:"coding"}];
-export default function Page(){ const [teamSize,setTeamSize]=useState(5); const [primaryUseCase,setPrimaryUseCase]=useState<UseCase>("coding"); const [items,setItems]=useState<SpendItem[]>(starter); const [email,setEmail]=useState(''); const [company,setCompany]=useState(''); const [saved,setSaved]=useState(false); useEffect(()=>{const raw=localStorage.getItem('audit-state'); if(raw){try{const s=JSON.parse(raw); setTeamSize(s.teamSize||5); setPrimaryUseCase(s.primaryUseCase||'coding'); setItems(s.items||starter)}catch{}}},[]); useEffect(()=>{localStorage.setItem('audit-state',JSON.stringify({teamSize,primaryUseCase,items}))},[teamSize,primaryUseCase,items]); const result=useMemo(()=>auditSpend({teamSize,primaryUseCase,tools:items}),[teamSize,primaryUseCase,items]); function update(i:number,k:keyof SpendItem,v:any){setItems(xs=>xs.map((x,idx)=>idx===i?{...x,[k]:k==='monthlySpend'||k==='seats'?Number(v):v}:x))} function addTool(){setItems([...items,{tool:'Claude',plan:'Pro',monthlySpend:20,seats:1,useCase:'research'}])} async function capture(){setSaved(false); await fetch('/api/leads',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({email,company,team_size:teamSize,audit:result,hp:''})}).catch(()=>null); setSaved(true)}
-return <main className="min-h-screen bg-slate-950 text-white"><section className="mx-auto max-w-6xl px-5 py-10"><nav className="flex items-center justify-between"><b className="text-xl">AuditFlow AI</b><span className="rounded-full border border-white/10 px-3 py-1 text-sm text-slate-300">Credex Round 1 MVP</span></nav><div className="grid gap-8 py-16 lg:grid-cols-2"><div><p className="mb-3 text-sm uppercase tracking-[0.3em] text-blue-300">AI spend intelligence</p><h1 className="text-5xl font-black tracking-tight md:text-7xl">Optimize Your AI Stack</h1><p className="mt-5 max-w-xl text-lg text-slate-300">Clean SaaS-style AI spend optimization report for startup teams. Enter your AI tools, get an instant audit, capture a report after value is shown, and share a public-safe savings result.</p><div className="mt-8 grid grid-cols-3 gap-3"><Metric label="Monthly savings" value={`$${result.totalMonthlySavings}`} /><Metric label="Annual savings" value={`$${result.totalAnnualSavings}`} /><Metric label="Confidence" value={`${result.confidenceScore}%`} /></div></div><div className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-2xl backdrop-blur"><h2 className="text-xl font-bold">Audit input</h2><div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-sm text-slate-300">Team size<input className="mt-1 w-full rounded-xl bg-slate-900 p-3 text-white" type="number" value={teamSize} onChange={e=>setTeamSize(Number(e.target.value))}/></label><label className="text-sm text-slate-300">Primary use case<select className="mt-1 w-full rounded-xl bg-slate-900 p-3 text-white" value={primaryUseCase} onChange={e=>setPrimaryUseCase(e.target.value as UseCase)}>{useCases.map(u=><option key={u}>{u}</option>)}</select></label></div>{items.map((it,i)=><div key={i} className="mt-3 rounded-2xl border border-white/10 bg-slate-900/70 p-3"><div className="grid gap-2 sm:grid-cols-5"><select className="rounded-lg bg-slate-800 p-2" value={it.tool} onChange={e=>update(i,'tool',e.target.value)}>{tools.map(t=><option key={t}>{t}</option>)}</select><input className="rounded-lg bg-slate-800 p-2" value={it.plan} onChange={e=>update(i,'plan',e.target.value)} placeholder="Plan"/><input className="rounded-lg bg-slate-800 p-2" type="number" value={it.monthlySpend} onChange={e=>update(i,'monthlySpend',e.target.value)} placeholder="Spend"/><input className="rounded-lg bg-slate-800 p-2" type="number" value={it.seats} onChange={e=>update(i,'seats',e.target.value)} placeholder="Seats"/><select className="rounded-lg bg-slate-800 p-2" value={it.useCase} onChange={e=>update(i,'useCase',e.target.value)}>{useCases.map(u=><option key={u}>{u}</option>)}</select></div></div>)}<button onClick={addTool} className="mt-3 rounded-xl bg-white px-4 py-2 font-semibold text-slate-950">Add tool</button></div></div><section className="rounded-3xl border border-white/10 bg-white p-6 text-slate-950 shadow-2xl"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm font-semibold uppercase text-blue-600">Audit result</p><h2 className="text-4xl font-black">Save ${result.totalAnnualSavings}/year</h2><p className="mt-2 max-w-2xl text-slate-600">{fallbackSummary(result)}</p></div>{result.tier==='high'&&<div className="rounded-2xl bg-slate-950 p-4 text-white"><b>Credex-fit lead</b><p className="text-sm text-slate-300">High savings case. Surface consultation CTA prominently.</p></div>}</div><div className="mt-6 grid gap-4 md:grid-cols-2">{result.recommendations.map(r=><article key={r.tool} className="rounded-2xl border border-slate-200 p-4"><div className="flex justify-between gap-3"><b>{r.tool}</b><span className="rounded-full bg-green-100 px-3 py-1 text-sm font-bold text-green-700">Save ${r.monthlySavings}/mo</span></div><p className="mt-2 text-sm text-slate-500">${r.currentSpend} current → ${r.recommendedSpend} recommended</p><p className="mt-2 font-semibold">{r.recommendedAction}</p><p className="mt-1 text-sm text-slate-600">{r.reason}</p></article>)}</div><div className="mt-6 rounded-2xl bg-slate-100 p-4"><h3 className="font-bold">Email report after value</h3><div className="mt-3 grid gap-2 sm:grid-cols-3"><input className="rounded-xl border p-3" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/><input className="rounded-xl border p-3" placeholder="Company optional" value={company} onChange={e=>setCompany(e.target.value)}/><button onClick={capture} className="rounded-xl bg-slate-950 p-3 font-bold text-white">{saved?'Saved':'Send report'}</button></div></div></section></section></main>}
-function Metric({label,value}:{label:string,value:string}){return <div className="rounded-2xl border border-white/10 bg-white/10 p-4"><p className="text-xs text-slate-300">{label}</p><p className="text-2xl font-black">{value}</p></div>}
+
+import { useEffect, useMemo, useState } from "react";
+import { auditSpend, fallbackSummary, SpendItem, UseCase } from "../lib/audit-engine";
+
+const tools = [
+  "Cursor",
+  "GitHub Copilot",
+  "Claude",
+  "ChatGPT",
+  "Anthropic API",
+  "OpenAI API",
+  "Gemini",
+  "Windsurf",
+] as const;
+
+const useCases = ["coding", "writing", "data", "research", "mixed"] as const;
+
+const starter: SpendItem[] = [
+  { tool: "Cursor", plan: "Business", monthlySpend: 80, seats: 2, useCase: "coding" },
+  { tool: "GitHub Copilot", plan: "Business", monthlySpend: 38, seats: 2, useCase: "coding" },
+  { tool: "OpenAI API", plan: "API direct", monthlySpend: 650, seats: 1, useCase: "coding" },
+];
+
+function money(value: number) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+}
+
+export default function Page() {
+  const [teamSize, setTeamSize] = useState(5);
+  const [primaryUseCase, setPrimaryUseCase] = useState<UseCase>("coding");
+  const [items, setItems] = useState<SpendItem[]>(starter);
+  const [email, setEmail] = useState("");
+  const [company, setCompany] = useState("");
+  const [role, setRole] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    const raw = localStorage.getItem("auditflow-state");
+    if (!raw) return;
+    try {
+      const savedState = JSON.parse(raw);
+      setTeamSize(savedState.teamSize || 5);
+      setPrimaryUseCase(savedState.primaryUseCase || "coding");
+      setItems(savedState.items || starter);
+    } catch {
+      localStorage.removeItem("auditflow-state");
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("auditflow-state", JSON.stringify({ teamSize, primaryUseCase, items }));
+  }, [teamSize, primaryUseCase, items]);
+
+  const result = useMemo(
+    () => auditSpend({ teamSize, primaryUseCase, tools: items }),
+    [teamSize, primaryUseCase, items]
+  );
+
+  function update(i: number, key: keyof SpendItem, value: string) {
+    setItems((current) =>
+      current.map((item, index) =>
+        index === i
+          ? {
+              ...item,
+              [key]: key === "monthlySpend" || key === "seats" ? Number(value) : value,
+            }
+          : item
+      )
+    );
+  }
+
+  function addTool() {
+    setItems([...items, { tool: "Claude", plan: "Pro", monthlySpend: 20, seats: 1, useCase: "research" }]);
+  }
+
+  function removeTool(index: number) {
+    setItems((current) => current.filter((_, i) => i !== index));
+  }
+
+  async function capture() {
+    if (!email.trim()) return;
+    setSaving(true);
+    setSaved(false);
+    await fetch("/api/leads", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, company, role, team_size: teamSize, audit: result, hp: "" }),
+    }).catch(() => null);
+    setSaving(false);
+    setSaved(true);
+  }
+
+  const maxRecommendation = Math.max(...result.recommendations.map((r) => r.monthlySavings), 1);
+
+  return (
+    <main className="page-shell">
+      <section className="hero-grid">
+        <nav className="top-nav">
+          <div className="brand-mark">AF</div>
+          <div>
+            <strong>AuditFlow AI</strong>
+            <span>Credex Round 1 MVP</span>
+          </div>
+          <a className="nav-pill" href="#audit">Run audit</a>
+        </nav>
+
+        <div className="hero-copy">
+          <div className="eyebrow">AI spend intelligence for startup teams</div>
+          <h1>Optimize your AI stack before it drains runway.</h1>
+          <p>
+            Audit Cursor, Copilot, Claude, ChatGPT, Gemini and API spend in minutes. See savings first,
+            capture the report after value, and share a public-safe result link.
+          </p>
+          <div className="hero-actions">
+            <a className="primary-button" href="#audit">Start free audit</a>
+            <a className="secondary-button" href="#report">View sample report</a>
+          </div>
+          <div className="trust-row">
+            <span>No login required</span>
+            <span>Pricing sourced</span>
+            <span>Founder-friendly</span>
+          </div>
+        </div>
+
+        <aside className="hero-card" aria-label="Audit summary preview">
+          <div className="hero-card-header">
+            <span>Live savings forecast</span>
+            <b>{result.confidenceScore}% confidence</b>
+          </div>
+          <div className="big-number">${money(result.totalAnnualSavings)}</div>
+          <p>estimated annual savings</p>
+          <div className="mini-bars">
+            {result.recommendations.slice(0, 4).map((r) => (
+              <div key={r.tool}>
+                <span>{r.tool}</span>
+                <div className="bar-track">
+                  <div className="bar-fill" style={{ width: `${Math.max(12, (r.monthlySavings / maxRecommendation) * 100)}%` }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </aside>
+      </section>
+
+      <section className="metric-grid" aria-label="Key audit metrics">
+        <Metric label="Monthly savings" value={`$${money(result.totalMonthlySavings)}`} />
+        <Metric label="Annual savings" value={`$${money(result.totalAnnualSavings)}`} />
+        <Metric label="Optimization confidence" value={`${result.confidenceScore}%`} />
+        <Metric label="Tools analyzed" value={`${items.length}`} />
+      </section>
+
+      <section id="audit" className="workspace-grid">
+        <div className="panel input-panel">
+          <div className="section-heading">
+            <span>Step 1</span>
+            <h2>Enter AI stack</h2>
+            <p>Form state persists across reloads so founders can complete the audit without losing work.</p>
+          </div>
+
+          <div className="form-row two">
+            <label>
+              Team size
+              <input type="number" value={teamSize} min={1} onChange={(e) => setTeamSize(Number(e.target.value))} />
+            </label>
+            <label>
+              Primary use case
+              <select value={primaryUseCase} onChange={(e) => setPrimaryUseCase(e.target.value as UseCase)}>
+                {useCases.map((useCase) => <option key={useCase}>{useCase}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div className="tool-list">
+            {items.map((item, index) => (
+              <article className="tool-card" key={`${item.tool}-${index}`}>
+                <div className="tool-card-top">
+                  <strong>Tool {index + 1}</strong>
+                  {items.length > 1 && <button onClick={() => removeTool(index)}>Remove</button>}
+                </div>
+                <div className="form-row five">
+                  <label>
+                    Tool
+                    <select value={item.tool} onChange={(e) => update(index, "tool", e.target.value)}>
+                      {tools.map((tool) => <option key={tool}>{tool}</option>)}
+                    </select>
+                  </label>
+                  <label>
+                    Plan
+                    <input value={item.plan} onChange={(e) => update(index, "plan", e.target.value)} />
+                  </label>
+                  <label>
+                    Monthly spend
+                    <input type="number" value={item.monthlySpend} onChange={(e) => update(index, "monthlySpend", e.target.value)} />
+                  </label>
+                  <label>
+                    Seats
+                    <input type="number" value={item.seats} onChange={(e) => update(index, "seats", e.target.value)} />
+                  </label>
+                  <label>
+                    Use case
+                    <select value={item.useCase} onChange={(e) => update(index, "useCase", e.target.value)}>
+                      {useCases.map((useCase) => <option key={useCase}>{useCase}</option>)}
+                    </select>
+                  </label>
+                </div>
+              </article>
+            ))}
+          </div>
+          <button className="ghost-button" onClick={addTool}>+ Add another tool</button>
+        </div>
+
+        <aside className="panel insight-panel">
+          <div className="section-heading">
+            <span>Step 2</span>
+            <h2>Audit intelligence</h2>
+            <p>Hardcoded financial rules do the math. AI is reserved for the summary layer only.</p>
+          </div>
+          <div className="score-ring">
+            <div>{result.confidenceScore}%</div>
+            <span>confidence</span>
+          </div>
+          <ul className="check-list">
+            <li>Plan rightsizing</li>
+            <li>Duplicate tool consolidation</li>
+            <li>Retail-to-credit savings signal</li>
+            <li>Public-safe report data</li>
+          </ul>
+        </aside>
+      </section>
+
+      <section id="report" className="report-panel">
+        <div className="report-header">
+          <div>
+            <span className="eyebrow dark">Step 3 · Audit result</span>
+            <h2>Save ${money(result.totalAnnualSavings)}/year</h2>
+            <p>{fallbackSummary(result)}</p>
+          </div>
+          {result.tier === "high" && (
+            <div className="credex-card">
+              <strong>Credex-fit opportunity</strong>
+              <p>High-savings case. Surface consultation CTA prominently after the user sees value.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="recommendation-grid">
+          {result.recommendations.map((r) => (
+            <article className="recommendation-card" key={r.tool}>
+              <div className="recommendation-top">
+                <strong>{r.tool}</strong>
+                <span>Save ${money(r.monthlySavings)}/mo</span>
+              </div>
+              <div className="spend-line">
+                <b>${money(r.currentSpend)}</b>
+                <span>current</span>
+                <i>→</i>
+                <b>${money(r.recommendedSpend)}</b>
+                <span>recommended</span>
+              </div>
+              <h3>{r.recommendedAction}</h3>
+              <p>{r.reason}</p>
+            </article>
+          ))}
+        </div>
+
+        <div className="lead-card">
+          <div>
+            <h3>Send the full report</h3>
+            <p>Email is requested after value is shown, matching the Credex assignment requirement.</p>
+          </div>
+          <div className="lead-form">
+            <input placeholder="Work email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input placeholder="Company optional" value={company} onChange={(e) => setCompany(e.target.value)} />
+            <input placeholder="Role optional" value={role} onChange={(e) => setRole(e.target.value)} />
+            <button onClick={capture} disabled={saving || !email.trim()}>{saving ? "Sending..." : saved ? "Saved" : "Send report"}</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <article className="metric-card">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
